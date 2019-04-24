@@ -1,0 +1,10 @@
+version: '2'
+services:
+    jupyter-spark:
+        image: jupyter/all-spark-notebook
+        container_name: "jupyter-spark"
+        volumes:
+          - ./jupyter/work:/home/jovyan/work
+        ports:
+            - 8888:8888
+        command: start-notebook.sh --NotebookApp.token=''

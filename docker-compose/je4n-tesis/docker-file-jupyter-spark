@@ -1,0 +1,72 @@
+FROM jupyter/all-spark-notebook
+
+USER $NB_USER
+# Set env vars for pydoop
+ENV HADOOP_HOME=/usr/local/hadoop-2.7.7
+ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+ENV HADOOP_CONF_HOME=/usr/local/hadoop-2.7.7/etc/hadoop
+ENV HADOOP_CONF_DIR=/usr/local/hadoop-2.7.7/etc/hadoop
+ENV HADOOP_PREFIX=/usr/local/hadoop-2.7.7
+
+USER root
+# Add proper open-jdk-8 not just the jre, needed for pydoop
+RUN echo "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse" >> /etc/apt/sources.list.d/trusty-backports.list && \
+apt-get -y update && \
+apt-get install --no-install-recommends -t trusty-backports -y openjdk-8-jdk && \
+rm /etc/apt/sources.list.d/trusty-backports.list && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/ && \
+#wget https://archive.apache.org/dist/hadoop/core/hadoop-2.7.7/hadoop-2.7.7.tar.gz && \
+wget http://192.168.1.38:8887/hadoop-2.7.7.tar.gz && \
+tar -xvf hadoop-2.7.7.tar.gz -C /usr/local && \
+chown -R $NB_USER:users /usr/local/hadoop-2.7.7 && \
+rm -f hadoop-2.7.7.tar.gz && \
+apt-get update && \
+apt-get install --no-install-recommends -y python-pip python3-pip  build-essential python-dev python3-dev libsasl2-dev python-setuptools python-wheel python3-setuptools python3-wheel && \
+apt-get install -y vim && \
+apt-get clean && \
+rm -rf /var/lib/apt/lists/*  && \
+rm -f /usr/local/hadoop-2.7.7/etc/hadoop/*
+
+# Remove the example hadoop configs and replace
+# with those for our cluster.
+#rm -f /usr/local/hadoop-2.7.7/etc/hadoop/*
+# I will mount it as a volume
+# Download this from ambari / cloudera manager and copy here
+#COPY hadoop-conf/ /usr/local/hadoop-2.7.7/etc/hadoop/
+
+# Spark-Submit doesn't work unless I set the following
+RUN echo "spark.driver.extraJavaOptions -Dhdp.version=2.5.3.0-37" >> /usr/local/spark/conf/spark-defaults.conf  && \
+echo "spark.yarn.am.extraJavaOptions -Dhdp.version=2.5.3.0-37" >> /usr/local/spark/conf/spark-defaults.conf && \
+echo "spark.master=yarn" >>  /usr/local/spark/conf/spark-defaults.conf && \
+echo "spark.hadoop.yarn.timeline-service.enabled=false" >> /usr/local/spark/conf/spark-defaults.conf && \
+chown -R $NB_USER:users /usr/local/spark/conf/spark-defaults.conf && \
+chown $NB_USER:users /usr/local/spark/conf/ && \
+mkdir -p /etc/hadoop/conf/ && \
+mkdir -p /usr/local/hadoop-2.7.7/etc/hadoop/conf/ && \
+chown $NB_USER:users /etc/hadoop/conf/ && \
+chown $NB_USER:users /usr/local/hadoop-2.7.7/etc/hadoop/conf/
+
+USER $NB_USER
+#USER root
+
+# Install useful jupyter extensions and python libraries like :
+# - Dashboards
+# - PyDoop
+# - PyHive
+RUN echo $HADOOP_HOME && \
+echo $HADOOP_CONF_DIR && \
+pip install pyhive thrift sasl thrift_sasl && \
+pip install --pre pydoop
+
+USER root
+# Ensure we overwrite the kernel config so that toree connects to cluster
+RUN jupyter toree install --sys-prefix --spark_opts="--master yarn --deploy-mode client --driver-memory 512m  --executor-memory 512m  --executor-cores 1 --driver-java-options -Dhdp.version=2.5.3.0-37 --conf spark.hadoop.yarn.timeline-service.enabled=false"
+#USER $NB_USER
+
+
+
+RUN chown jovyan -R /home/jovyan/.local
+
+
+USER $NB_USER
